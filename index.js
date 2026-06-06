@@ -37,13 +37,23 @@ async function getRankFromStatsCC(profileUrl) {
   const $ = cheerio.load(response.data);
   const pageText = $("body").text().replace(/\s+/g, " ");
 
-  const rankMatch = pageText.match(
-    /Peak Rank\s+(Champion|Diamond|Emerald|Platinum|Gold|Silver|Bronze|Copper)\s+[IVX]+/i
-  );
+  console.log(pageText);
 
-  if (rankMatch) {
-    const rank = rankMatch[1].toLowerCase();
-    return rank.charAt(0).toUpperCase() + rank.slice(1);
+  const ranks = [
+    "Champion",
+    "Diamond",
+    "Emerald",
+    "Platinum",
+    "Gold",
+    "Silver",
+    "Bronze",
+    "Copper"
+  ];
+
+  for (const rank of ranks) {
+    if (pageText.includes(rank)) {
+      return rank;
+    }
   }
 
   return "Unranked";
@@ -77,10 +87,7 @@ async function assignRankRole(member, rank) {
   }
 
   await member.roles.add(roleId);
-
-  if (rankRoles.RankVerified) {
-    await member.roles.add(rankRoles.RankVerified);
-  }
+  await member.roles.add(rankRoles.RankVerified);
 }
 
 client.once("clientReady", () => {
@@ -91,29 +98,32 @@ client.on("interactionCreate", async interaction => {
   if (!interaction.isChatInputCommand()) return;
 
   if (interaction.commandName === "verify") {
+
     await interaction.deferReply();
 
     const profileUrl = interaction.options.getString("profileurl");
 
     if (!isValidStatsCCUrl(profileUrl)) {
       await interaction.editReply(
-        "❌ Please use a valid Stats.cc Siege profile URL.\n\nExample:\nhttps://stats.cc/siege/Username/uuid?playlist=ranked"
+        "❌ Please provide a valid Stats.cc Siege profile URL."
       );
       return;
     }
 
     try {
       const rank = await getRankFromStatsCC(profileUrl);
+
       await assignRankRole(interaction.member, rank);
 
       await interaction.editReply(
-        `🎮 **Rank Verification Complete!**\n\n👤 Player: ${interaction.user}\n🏆 Peak Rank: **${rank}**\n✅ Rank role assigned`
+        `🎮 **Rank Verification Complete!**\n\n👤 Player: ${interaction.user}\n🏆 Highest Rank Found: **${rank}**\n✅ Rank role assigned`
       );
+
     } catch (error) {
       console.error(error);
 
       await interaction.editReply(
-        "❌ I could not verify your peak rank from Stats.cc. Check the profile URL and make sure the page is public."
+        "❌ Verification failed. Check the Stats.cc profile URL and try again."
       );
     }
   }
