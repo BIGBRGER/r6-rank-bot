@@ -23,7 +23,6 @@ const rankRoles = {
   RankVerified: "1512812744762462238"
 };
 
-// Replace these later with proper hosted image URLs if you want custom icons
 const rankIcons = {
   Copper: "https://static.wikia.nocookie.net/rainbowsix/images/4/4e/Copper_Rank.png",
   Bronze: "https://static.wikia.nocookie.net/rainbowsix/images/2/2f/Bronze_Rank.png",
@@ -34,6 +33,18 @@ const rankIcons = {
   Diamond: "https://static.wikia.nocookie.net/rainbowsix/images/d/d6/Diamond_Rank.png",
   Champion: "https://static.wikia.nocookie.net/rainbowsix/images/7/73/Champion_Rank.png",
   Unranked: "https://static.wikia.nocookie.net/rainbowsix/images/5/55/Unranked_Rank.png"
+};
+
+const rankColors = {
+  Copper: 0x9c6b30,
+  Bronze: 0xcd7f32,
+  Silver: 0xc0c0c0,
+  Gold: 0xffd700,
+  Platinum: 0x00d4ff,
+  Emerald: 0x2ecc71,
+  Diamond: 0x9b59b6,
+  Champion: 0xff2f8f,
+  Unranked: 0x808080
 };
 
 function isValidStatsCCUrl(url) {
@@ -50,25 +61,30 @@ function extractPlayerName(profileUrl) {
   }
 }
 
-async function getRankFromStatsCC(profileUrl) {
-  const response = await axios.get(profileUrl, {
-    timeout: 8000,
-    headers: {
-      "User-Agent": "Mozilla/5.0"
+function cleanRank(rank) {
+  if (!rank) return "Unranked";
+
+  const rankMap = [
+    "Champion",
+    "Diamond",
+    "Emerald",
+    "Platinum",
+    "Gold",
+    "Silver",
+    "Bronze",
+    "Copper"
+  ];
+
+  for (const baseRank of rankMap) {
+    if (rank.toLowerCase().includes(baseRank.toLowerCase())) {
+      return baseRank;
     }
-  });
-
-  const $ = cheerio.load(response.data);
-  const pageText = $("body").text().replace(/\s+/g, " ").trim();
-
-  const maxRanksMatch = pageText.match(/Max Ranks(.{0,500})/i);
-
-  if (!maxRanksMatch) {
-    return "Unranked";
   }
 
-  const maxRanksText = maxRanksMatch[1];
+  return "Unranked";
+}
 
+function findHighestRank(text) {
   const ranks = [
     "Champion",
     "Diamond",
@@ -81,12 +97,73 @@ async function getRankFromStatsCC(profileUrl) {
   ];
 
   for (const rank of ranks) {
-    if (maxRanksText.toLowerCase().includes(rank.toLowerCase())) {
+    if (text.toLowerCase().includes(rank.toLowerCase())) {
       return rank;
     }
   }
 
   return "Unranked";
+}
+
+async function getStatsFromStatsCC(profileUrl) {
+  const response = await axios.get(profileUrl, {
+    timeout: 8000,
+    headers: {
+      "User-Agent": "Mozilla/5.0"
+    }
+  });
+
+  const $ = cheerio.load(response.data);
+  const pageText = $("body").text().replace(/\s+/g, " ").trim();
+
+  let currentRank = "Unranked";
+  let kd = "N/A";
+  let maxRank = "Unranked";
+
+  const currentSeasonMatch = pageText.match(
+    /Current Season(.{0,250})/i
+  );
+
+  if (currentSeasonMatch) {
+    const currentSeasonText = currentSeasonMatch[1];
+
+    currentRank = findHighestRank(currentSeasonText);
+
+    const kdMatch = currentSeasonText.match(/KD\s*([0-9]+(?:\.[0-9]+)?)/i);
+    if (kdMatch) {
+      kd = kdMatch[1];
+    }
+  }
+
+  const maxRanksMatch = pageText.match(
+    /Max Ranks(.{0,700})/i
+  );
+
+  if (maxRanksMatch) {
+    const maxRanksText = maxRanksMatch[1];
+    maxRank = findHighestRank(maxRanksText);
+  }
+
+  if (currentRank === "Unranked") {
+    currentRank = findHighestRank(pageText);
+  }
+
+  if (kd === "N/A") {
+    const kdMatch = pageText.match(/KD\s*([0-9]+(?:\.[0-9]+)?)/i);
+    if (kdMatch) {
+      kd = kdMatch[1];
+    }
+  }
+
+  if (maxRank === "Unranked") {
+    maxRank = currentRank;
+  }
+
+  return {
+    currentRank: cleanRank(currentRank),
+    kd,
+    maxRank: cleanRank(maxRank)
+  };
 }
 
 async function assignRankRole(member, rank) {
@@ -120,22 +197,6 @@ async function assignRankRole(member, rank) {
   await member.roles.add(rankRoles.RankVerified);
 }
 
-function getEmbedColor(rank) {
-  const colors = {
-    Copper: 0x9c6b30,
-    Bronze: 0xcd7f32,
-    Silver: 0xc0c0c0,
-    Gold: 0xffd700,
-    Platinum: 0x00bcd4,
-    Emerald: 0x2ecc71,
-    Diamond: 0x9b59b6,
-    Champion: 0xff1493,
-    Unranked: 0x808080
-  };
-
-  return colors[rank] || 0x2b2d31;
-}
-
 client.once("clientReady", () => {
   console.log(`Logged in as ${client.user.tag}`);
 });
@@ -157,27 +218,50 @@ client.on("interactionCreate", async interaction => {
     }
 
     const playerName = extractPlayerName(profileUrl);
-    const rank = await getRankFromStatsCC(profileUrl);
+    const stats = await getStatsFromStatsCC(profileUrl);
 
-    await assignRankRole(interaction.member, rank);
+    await assignRankRole(interaction.member, stats.maxRank);
 
     const embed = new EmbedBuilder()
-      .setColor(getEmbedColor(rank))
+      .setColor(rankColors[stats.maxRank] || 0xff2f8f)
       .setAuthor({
         name: "SiegeVerify",
-        iconURL: rankIcons[rank]
+        iconURL: rankIcons[stats.maxRank] || rankIcons.Unranked
       })
       .setTitle(playerName)
       .setURL(profileUrl)
       .setDescription(`Player information for **${playerName}**`)
-      .setThumbnail(rankIcons[rank])
+      .setThumbnail(rankIcons[stats.maxRank] || rankIcons.Unranked)
       .addFields(
-        { name: "Rank Type", value: "Peak / Max Rank", inline: true },
-        { name: "Rank", value: `**${rank}**`, inline: true },
-        { name: "Verified User", value: `${interaction.user}`, inline: false },
-        { name: "Status", value: "✅ Rank role assigned", inline: false }
+        {
+          name: "🏆 Current Rank",
+          value: `**${stats.currentRank}**`,
+          inline: true
+        },
+        {
+          name: "🎯 K/D",
+          value: `**${stats.kd}**`,
+          inline: true
+        },
+        {
+          name: "⭐ Max Rank",
+          value: `**${stats.maxRank}**`,
+          inline: true
+        },
+        {
+          name: "👤 Verified User",
+          value: `${interaction.user}`,
+          inline: true
+        },
+        {
+          name: "📋 Status",
+          value: "✅ Rank role assigned",
+          inline: true
+        }
       )
-      .setFooter({ text: "SiegeVerify • Powered by Stats.cc" })
+      .setFooter({
+        text: "SiegeVerify • Stats powered by Stats.cc"
+      })
       .setTimestamp();
 
     await interaction.editReply({ embeds: [embed] });
