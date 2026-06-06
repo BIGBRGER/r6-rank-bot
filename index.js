@@ -29,17 +29,14 @@ function isValidStatsCCUrl(url) {
 
 async function getRankFromStatsCC(profileUrl) {
   const response = await axios.get(profileUrl, {
-    timeout: 15000,
+    timeout: 8000,
     headers: {
-      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36",
-      "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+      "User-Agent": "Mozilla/5.0"
     }
   });
 
   const $ = cheerio.load(response.data);
   const pageText = $("body").text().replace(/\s+/g, " ").trim();
-
-  console.log("Stats.cc page text sample:", pageText.slice(0, 1000));
 
   const ranks = [
     "Champion",
@@ -89,10 +86,7 @@ async function assignRankRole(member, rank) {
   }
 
   await member.roles.add(roleId);
-
-  if (rankRoles.RankVerified) {
-    await member.roles.add(rankRoles.RankVerified);
-  }
+  await member.roles.add(rankRoles.RankVerified);
 }
 
 client.once("clientReady", () => {
@@ -100,9 +94,10 @@ client.once("clientReady", () => {
 });
 
 client.on("interactionCreate", async interaction => {
-  if (!interaction.isChatInputCommand()) return;
+  try {
+    if (!interaction.isChatInputCommand()) return;
+    if (interaction.commandName !== "verify") return;
 
-  if (interaction.commandName === "verify") {
     await interaction.deferReply();
 
     const profileUrl = interaction.options.getString("profileurl");
@@ -114,25 +109,20 @@ client.on("interactionCreate", async interaction => {
       return;
     }
 
-    try {
-      const rank = await getRankFromStatsCC(profileUrl);
-      await assignRankRole(interaction.member, rank);
+    const rank = await getRankFromStatsCC(profileUrl);
+    await assignRankRole(interaction.member, rank);
 
+    await interaction.editReply(
+      `🎮 **Rank Verification Complete!**\n\n👤 Player: ${interaction.user}\n🏆 Highest Rank Found: **${rank}**\n✅ Rank role assigned`
+    );
+
+  } catch (error) {
+    console.error("Interaction error:", error);
+
+    if (interaction.deferred || interaction.replied) {
       await interaction.editReply(
-        `🎮 **Rank Verification Complete!**\n\n👤 Player: ${interaction.user}\n🏆 Highest Rank Found: **${rank}**\n✅ Rank role assigned`
-      );
-    } catch (error) {
-      console.error("Verification error:", error);
-
-      let errorMessage = error.message;
-
-      if (error.response) {
-        errorMessage = `Stats.cc returned HTTP ${error.response.status}`;
-      }
-
-      await interaction.editReply(
-        `❌ Verification failed.\n\nReason: **${errorMessage}**`
-      );
+        `❌ Verification failed.\n\nReason: **${error.message}**`
+      ).catch(console.error);
     }
   }
 });
