@@ -1,4 +1,4 @@
-const { Client, GatewayIntentBits } = require("discord.js");
+const { Client, GatewayIntentBits, EmbedBuilder } = require("discord.js");
 const axios = require("axios");
 const cheerio = require("cheerio");
 require("dotenv").config();
@@ -23,8 +23,31 @@ const rankRoles = {
   RankVerified: "1512812744762462238"
 };
 
+// Replace these later with proper hosted image URLs if you want custom icons
+const rankIcons = {
+  Copper: "https://static.wikia.nocookie.net/rainbowsix/images/4/4e/Copper_Rank.png",
+  Bronze: "https://static.wikia.nocookie.net/rainbowsix/images/2/2f/Bronze_Rank.png",
+  Silver: "https://static.wikia.nocookie.net/rainbowsix/images/3/3a/Silver_Rank.png",
+  Gold: "https://static.wikia.nocookie.net/rainbowsix/images/3/39/Gold_Rank.png",
+  Platinum: "https://static.wikia.nocookie.net/rainbowsix/images/f/fc/Platinum_Rank.png",
+  Emerald: "https://static.wikia.nocookie.net/rainbowsix/images/2/27/Emerald_Rank.png",
+  Diamond: "https://static.wikia.nocookie.net/rainbowsix/images/d/d6/Diamond_Rank.png",
+  Champion: "https://static.wikia.nocookie.net/rainbowsix/images/7/73/Champion_Rank.png",
+  Unranked: "https://static.wikia.nocookie.net/rainbowsix/images/5/55/Unranked_Rank.png"
+};
+
 function isValidStatsCCUrl(url) {
   return url && url.startsWith("https://stats.cc/siege/");
+}
+
+function extractPlayerName(profileUrl) {
+  try {
+    const url = new URL(profileUrl);
+    const parts = url.pathname.split("/").filter(Boolean);
+    return parts[1] || "Unknown Player";
+  } catch {
+    return "Unknown Player";
+  }
 }
 
 async function getRankFromStatsCC(profileUrl) {
@@ -97,6 +120,22 @@ async function assignRankRole(member, rank) {
   await member.roles.add(rankRoles.RankVerified);
 }
 
+function getEmbedColor(rank) {
+  const colors = {
+    Copper: 0x9c6b30,
+    Bronze: 0xcd7f32,
+    Silver: 0xc0c0c0,
+    Gold: 0xffd700,
+    Platinum: 0x00bcd4,
+    Emerald: 0x2ecc71,
+    Diamond: 0x9b59b6,
+    Champion: 0xff1493,
+    Unranked: 0x808080
+  };
+
+  return colors[rank] || 0x2b2d31;
+}
+
 client.once("clientReady", () => {
   console.log(`Logged in as ${client.user.tag}`);
 });
@@ -117,12 +156,31 @@ client.on("interactionCreate", async interaction => {
       return;
     }
 
+    const playerName = extractPlayerName(profileUrl);
     const rank = await getRankFromStatsCC(profileUrl);
+
     await assignRankRole(interaction.member, rank);
 
-    await interaction.editReply(
-      `🎮 **Rank Verification Complete!**\n\n👤 Player: ${interaction.user}\n🏆 Peak/Max Rank: **${rank}**\n✅ Rank role assigned`
-    );
+    const embed = new EmbedBuilder()
+      .setColor(getEmbedColor(rank))
+      .setAuthor({
+        name: "SiegeVerify",
+        iconURL: rankIcons[rank]
+      })
+      .setTitle(playerName)
+      .setURL(profileUrl)
+      .setDescription(`Player information for **${playerName}**`)
+      .setThumbnail(rankIcons[rank])
+      .addFields(
+        { name: "Rank Type", value: "Peak / Max Rank", inline: true },
+        { name: "Rank", value: `**${rank}**`, inline: true },
+        { name: "Verified User", value: `${interaction.user}`, inline: false },
+        { name: "Status", value: "✅ Rank role assigned", inline: false }
+      )
+      .setFooter({ text: "SiegeVerify • Powered by Stats.cc" })
+      .setTimestamp();
+
+    await interaction.editReply({ embeds: [embed] });
 
   } catch (error) {
     console.error("Interaction error:", error);
