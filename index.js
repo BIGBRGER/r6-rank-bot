@@ -38,6 +38,14 @@ async function getRankFromStatsCC(profileUrl) {
   const $ = cheerio.load(response.data);
   const pageText = $("body").text().replace(/\s+/g, " ").trim();
 
+  const maxRanksMatch = pageText.match(/Max Ranks(.{0,500})/i);
+
+  if (!maxRanksMatch) {
+    return "Unranked";
+  }
+
+  const maxRanksText = maxRanksMatch[1];
+
   const ranks = [
     "Champion",
     "Diamond",
@@ -50,7 +58,7 @@ async function getRankFromStatsCC(profileUrl) {
   ];
 
   for (const rank of ranks) {
-    if (pageText.toLowerCase().includes(rank.toLowerCase())) {
+    if (maxRanksText.toLowerCase().includes(rank.toLowerCase())) {
       return rank;
     }
   }
@@ -113,7 +121,7 @@ client.on("interactionCreate", async interaction => {
     await assignRankRole(interaction.member, rank);
 
     await interaction.editReply(
-      `🎮 **Rank Verification Complete!**\n\n👤 Player: ${interaction.user}\n🏆 Highest Rank Found: **${rank}**\n✅ Rank role assigned`
+      `🎮 **Rank Verification Complete!**\n\n👤 Player: ${interaction.user}\n🏆 Peak/Max Rank: **${rank}**\n✅ Rank role assigned`
     );
 
   } catch (error) {
