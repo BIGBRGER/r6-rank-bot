@@ -38,7 +38,7 @@ async function getRankFromStatsCC(profileUrl) {
   const pageText = $("body").text().replace(/\s+/g, " ");
 
   const rankMatch = pageText.match(
-    /Current Season\s+(Champion|Diamond|Emerald|Platinum|Gold|Silver|Bronze|Copper)\s+[IVX]+/i
+    /Peak Rank\s+(Champion|Diamond|Emerald|Platinum|Gold|Silver|Bronze|Copper)\s+[IVX]+/i
   );
 
   if (rankMatch) {
@@ -77,7 +77,10 @@ async function assignRankRole(member, rank) {
   }
 
   await member.roles.add(roleId);
-  await member.roles.add(rankRoles.RankVerified);
+
+  if (rankRoles.RankVerified) {
+    await member.roles.add(rankRoles.RankVerified);
+  }
 }
 
 client.once("clientReady", () => {
@@ -88,13 +91,13 @@ client.on("interactionCreate", async interaction => {
   if (!interaction.isChatInputCommand()) return;
 
   if (interaction.commandName === "verify") {
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply();
 
     const profileUrl = interaction.options.getString("profileurl");
 
     if (!isValidStatsCCUrl(profileUrl)) {
       await interaction.editReply(
-        "Please use a valid Stats.cc Siege profile URL, for example: https://stats.cc/siege/Username/uuid?playlist=ranked"
+        "❌ Please use a valid Stats.cc Siege profile URL.\n\nExample:\nhttps://stats.cc/siege/Username/uuid?playlist=ranked"
       );
       return;
     }
@@ -104,13 +107,13 @@ client.on("interactionCreate", async interaction => {
       await assignRankRole(interaction.member, rank);
 
       await interaction.editReply(
-        `Verified your Stats.cc rank as **${rank}**. Your Discord role has been updated.`
+        `🎮 **Rank Verification Complete!**\n\n👤 Player: ${interaction.user}\n🏆 Peak Rank: **${rank}**\n✅ Rank role assigned`
       );
     } catch (error) {
       console.error(error);
 
       await interaction.editReply(
-        "I could not verify your rank from Stats.cc. Check the profile URL and make sure the page is public."
+        "❌ I could not verify your peak rank from Stats.cc. Check the profile URL and make sure the page is public."
       );
     }
   }
