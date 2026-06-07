@@ -61,29 +61,6 @@ function extractPlayerName(profileUrl) {
   }
 }
 
-function cleanRank(rank) {
-  if (!rank) return "Unranked";
-
-  const rankMap = [
-    "Champion",
-    "Diamond",
-    "Emerald",
-    "Platinum",
-    "Gold",
-    "Silver",
-    "Bronze",
-    "Copper"
-  ];
-
-  for (const baseRank of rankMap) {
-    if (rank.toLowerCase().includes(baseRank.toLowerCase())) {
-      return baseRank;
-    }
-  }
-
-  return "Unranked";
-}
-
 function findHighestRank(text) {
   const ranks = [
     "Champion",
@@ -107,9 +84,13 @@ function findHighestRank(text) {
 
 async function getStatsFromStatsCC(profileUrl) {
   const response = await axios.get(profileUrl, {
-    timeout: 8000,
+    timeout: 12000,
     headers: {
-      "User-Agent": "Mozilla/5.0"
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+      "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+      "Accept-Language": "en-GB,en;q=0.9",
+      "Referer": "https://stats.cc/",
+      "Cache-Control": "no-cache"
     }
   });
 
@@ -138,13 +119,7 @@ async function getStatsFromStatsCC(profileUrl) {
   }
 
   if (currentRank === "Unranked") {
-    const currentRankMatch = pageText.match(
-      /Current Rank(.{0,150})(Champion|Diamond|Emerald|Platinum|Gold|Silver|Bronze|Copper)/i
-    );
-
-    if (currentRankMatch) {
-      currentRank = currentRankMatch[2];
-    }
+    currentRank = findHighestRank(pageText);
   }
 
   if (kd === "N/A") {
@@ -157,9 +132,9 @@ async function getStatsFromStatsCC(profileUrl) {
   }
 
   return {
-    currentRank: cleanRank(currentRank),
+    currentRank,
     kd,
-    maxRank: cleanRank(maxRank)
+    maxRank
   };
 }
 
@@ -197,9 +172,7 @@ async function assignRankRole(member, rank) {
 function buildVerificationReminderEmbed() {
   return new EmbedBuilder()
     .setColor(0xff2f8f)
-    .setAuthor({
-      name: "SiegeVerify"
-    })
+    .setAuthor({ name: "SiegeVerify" })
     .setTitle("Verify Your Rainbow Six Siege Rank")
     .setDescription(
       "Use `/verify` and paste your Stats.cc Siege profile URL to receive your ranked role."
@@ -329,9 +302,15 @@ client.on("interactionCreate", async interaction => {
   } catch (error) {
     console.error("Interaction error:", error);
 
+    let message = error.message;
+
+    if (error.response && error.response.status === 403) {
+      message = "Stats.cc blocked the request from the hosting server. Try again later or use manual verification.";
+    }
+
     if (interaction.deferred || interaction.replied) {
       await interaction.editReply(
-        `❌ Verification failed.\n\nReason: **${error.message}**`
+        `❌ Verification failed.\n\nReason: **${message}**`
       ).catch(console.error);
     }
   }
