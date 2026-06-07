@@ -23,17 +23,28 @@ const rankRoles = {
   RankVerified: "1512812744762462238"
 };
 
-// Replace these later with proper hosted image URLs if you want custom icons
 const rankIcons = {
-  Copper: "https://static.wikia.nocookie.net/rainbowsix/images/4/4e/Copper_Rank.png",
-  Bronze: "https://static.wikia.nocookie.net/rainbowsix/images/2/2f/Bronze_Rank.png",
-  Silver: "https://static.wikia.nocookie.net/rainbowsix/images/3/3a/Silver_Rank.png",
-  Gold: "https://static.wikia.nocookie.net/rainbowsix/images/3/39/Gold_Rank.png",
-  Platinum: "https://static.wikia.nocookie.net/rainbowsix/images/f/fc/Platinum_Rank.png",
-  Emerald: "https://static.wikia.nocookie.net/rainbowsix/images/2/27/Emerald_Rank.png",
-  Diamond: "https://static.wikia.nocookie.net/rainbowsix/images/d/d6/Diamond_Rank.png",
-  Champion: "https://static.wikia.nocookie.net/rainbowsix/images/7/73/Champion_Rank.png",
-  Unranked: "https://static.wikia.nocookie.net/rainbowsix/images/5/55/Unranked_Rank.png"
+  Copper: "https://cdn.discordapp.com/attachments/1513166409348153344/1513166983934246912/30392-copper.png",
+  Bronze: "https://cdn.discordapp.com/attachments/1513166409348153344/1513167008168935606/50972-bronze.png",
+  Silver: "https://cdn.discordapp.com/attachments/1513166409348153344/1513167017425768568/54401-silver.png",
+  Gold: "https://cdn.discordapp.com/attachments/1513166409348153344/1513167028482080899/16646-gold.png",
+  Platinum: "https://cdn.discordapp.com/attachments/1513166409348153344/1513167043136852131/93489-rainbowsixsigeplatinum.png",
+  Emerald: "https://cdn.discordapp.com/attachments/1513166409348153344/1513167055984005120/94972-emerald.png",
+  Diamond: "https://cdn.discordapp.com/attachments/1513166409348153344/1513167072002052116/6436-rainbowsixsiegediamond.png",
+  Champion: "https://cdn.discordapp.com/attachments/1513166409348153344/1513167073944277072/6679-r6champ.png",
+  Unranked: "https://cdn.discordapp.com/attachments/1513166409348153344/1513166983934246912/30392-copper.png"
+};
+
+const rankColors = {
+  Copper: 0x9c6b30,
+  Bronze: 0xcd7f32,
+  Silver: 0xc0c0c0,
+  Gold: 0xffd700,
+  Platinum: 0x00d4ff,
+  Emerald: 0x2ecc71,
+  Diamond: 0x9b59b6,
+  Champion: 0xff2f8f,
+  Unranked: 0x808080
 };
 
 function isValidStatsCCUrl(url) {
@@ -50,25 +61,30 @@ function extractPlayerName(profileUrl) {
   }
 }
 
-async function getRankFromStatsCC(profileUrl) {
-  const response = await axios.get(profileUrl, {
-    timeout: 8000,
-    headers: {
-      "User-Agent": "Mozilla/5.0"
+function cleanRank(rank) {
+  if (!rank) return "Unranked";
+
+  const rankMap = [
+    "Champion",
+    "Diamond",
+    "Emerald",
+    "Platinum",
+    "Gold",
+    "Silver",
+    "Bronze",
+    "Copper"
+  ];
+
+  for (const baseRank of rankMap) {
+    if (rank.toLowerCase().includes(baseRank.toLowerCase())) {
+      return baseRank;
     }
-  });
-
-  const $ = cheerio.load(response.data);
-  const pageText = $("body").text().replace(/\s+/g, " ").trim();
-
-  const maxRanksMatch = pageText.match(/Max Ranks(.{0,500})/i);
-
-  if (!maxRanksMatch) {
-    return "Unranked";
   }
 
-  const maxRanksText = maxRanksMatch[1];
+  return "Unranked";
+}
 
+function findHighestRank(text) {
   const ranks = [
     "Champion",
     "Diamond",
@@ -81,12 +97,70 @@ async function getRankFromStatsCC(profileUrl) {
   ];
 
   for (const rank of ranks) {
-    if (maxRanksText.toLowerCase().includes(rank.toLowerCase())) {
+    if (text.toLowerCase().includes(rank.toLowerCase())) {
       return rank;
     }
   }
 
   return "Unranked";
+}
+
+async function getStatsFromStatsCC(profileUrl) {
+  const response = await axios.get(profileUrl, {
+    timeout: 8000,
+    headers: {
+      "User-Agent": "Mozilla/5.0"
+    }
+  });
+
+  const $ = cheerio.load(response.data);
+  const pageText = $("body").text().replace(/\s+/g, " ").trim();
+
+  let currentRank = "Unranked";
+  let kd = "N/A";
+  let maxRank = "Unranked";
+
+  const currentSeasonMatch = pageText.match(/Current Season(.{0,300})/i);
+
+  if (currentSeasonMatch) {
+    const currentSeasonText = currentSeasonMatch[1];
+    currentRank = findHighestRank(currentSeasonText);
+
+    const kdMatch = currentSeasonText.match(/KD\s*([0-9]+(?:\.[0-9]+)?)/i);
+    if (kdMatch) kd = kdMatch[1];
+  }
+
+  const maxRanksMatch = pageText.match(/Max Ranks(.{0,700})/i);
+
+  if (maxRanksMatch) {
+    const maxRanksText = maxRanksMatch[1];
+    maxRank = findHighestRank(maxRanksText);
+  }
+
+  if (currentRank === "Unranked") {
+    const currentRankMatch = pageText.match(
+      /Current Rank(.{0,150})(Champion|Diamond|Emerald|Platinum|Gold|Silver|Bronze|Copper)/i
+    );
+
+    if (currentRankMatch) {
+      currentRank = currentRankMatch[2];
+    }
+  }
+
+  if (kd === "N/A") {
+    const kdMatch = pageText.match(/KD\s*([0-9]+(?:\.[0-9]+)?)/i);
+    if (kdMatch) kd = kdMatch[1];
+  }
+
+  if (maxRank === "Unranked") {
+    maxRank = currentRank;
+  }
+
+  return {
+    currentRank: cleanRank(currentRank),
+    kd,
+    maxRank: cleanRank(maxRank)
+  };
 }
 
 async function assignRankRole(member, rank) {
@@ -120,24 +194,69 @@ async function assignRankRole(member, rank) {
   await member.roles.add(rankRoles.RankVerified);
 }
 
-function getEmbedColor(rank) {
-  const colors = {
-    Copper: 0x9c6b30,
-    Bronze: 0xcd7f32,
-    Silver: 0xc0c0c0,
-    Gold: 0xffd700,
-    Platinum: 0x00bcd4,
-    Emerald: 0x2ecc71,
-    Diamond: 0x9b59b6,
-    Champion: 0xff1493,
-    Unranked: 0x808080
-  };
+function buildVerificationReminderEmbed() {
+  return new EmbedBuilder()
+    .setColor(0xff2f8f)
+    .setAuthor({
+      name: "SiegeVerify"
+    })
+    .setTitle("Verify Your Rainbow Six Siege Rank")
+    .setDescription(
+      "Use `/verify` and paste your Stats.cc Siege profile URL to receive your ranked role."
+    )
+    .setThumbnail(rankIcons.Champion)
+    .addFields(
+      {
+        name: "How to verify",
+        value: "`/verify profileurl:https://stats.cc/siege/Username/uuid?playlist=ranked`",
+        inline: false
+      },
+      {
+        name: "Supported Roles",
+        value: "Copper • Bronze • Silver • Gold • Platinum • Emerald • Diamond • Champion",
+        inline: false
+      }
+    )
+    .setFooter({
+      text: "SiegeVerify • Automatic Rank Verification"
+    })
+    .setTimestamp();
+}
 
-  return colors[rank] || 0x2b2d31;
+async function sendVerificationReminder() {
+  const channelId = process.env.VERIFY_CHANNEL_ID;
+
+  if (!channelId) {
+    console.log("VERIFY_CHANNEL_ID is not set.");
+    return;
+  }
+
+  try {
+    const channel = await client.channels.fetch(channelId);
+
+    if (!channel || !channel.isTextBased()) {
+      console.log("Verify channel not found or is not text based.");
+      return;
+    }
+
+    await channel.send({
+      embeds: [buildVerificationReminderEmbed()]
+    });
+
+    console.log("Verification reminder sent.");
+  } catch (error) {
+    console.error("Failed to send verification reminder:", error);
+  }
 }
 
 client.once("clientReady", () => {
   console.log(`Logged in as ${client.user.tag}`);
+
+  sendVerificationReminder();
+
+  setInterval(() => {
+    sendVerificationReminder();
+  }, 60 * 60 * 1000);
 });
 
 client.on("interactionCreate", async interaction => {
@@ -157,27 +276,52 @@ client.on("interactionCreate", async interaction => {
     }
 
     const playerName = extractPlayerName(profileUrl);
-    const rank = await getRankFromStatsCC(profileUrl);
+    const stats = await getStatsFromStatsCC(profileUrl);
 
-    await assignRankRole(interaction.member, rank);
+    await assignRankRole(interaction.member, stats.maxRank);
 
     const embed = new EmbedBuilder()
-      .setColor(getEmbedColor(rank))
+      .setColor(rankColors[stats.maxRank] || 0xff2f8f)
       .setAuthor({
         name: "SiegeVerify",
-        iconURL: rankIcons[rank]
+        iconURL: rankIcons[stats.maxRank] || rankIcons.Unranked
       })
-      .setTitle(playerName)
+      .setTitle(`🎮 ${playerName}`)
       .setURL(profileUrl)
-      .setDescription(`Player information for **${playerName}**`)
-      .setThumbnail(rankIcons[rank])
-      .addFields(
-        { name: "Rank Type", value: "Peak / Max Rank", inline: true },
-        { name: "Rank", value: `**${rank}**`, inline: true },
-        { name: "Verified User", value: `${interaction.user}`, inline: false },
-        { name: "Status", value: "✅ Rank role assigned", inline: false }
+      .setThumbnail(rankIcons[stats.maxRank] || rankIcons.Unranked)
+      .setDescription(
+        "**Rainbow Six Siege Rank Verification**\n\nSuccessfully verified via Stats.cc"
       )
-      .setFooter({ text: "SiegeVerify • Powered by Stats.cc" })
+      .addFields(
+        {
+          name: "🏆 Current Rank",
+          value: `**${stats.currentRank}**`,
+          inline: true
+        },
+        {
+          name: "⭐ Max Rank",
+          value: `**${stats.maxRank}**`,
+          inline: true
+        },
+        {
+          name: "🎯 K/D",
+          value: `**${stats.kd}**`,
+          inline: true
+        },
+        {
+          name: "👤 Verified User",
+          value: `${interaction.user}`,
+          inline: false
+        },
+        {
+          name: "📋 Status",
+          value: "✅ Rank role assigned",
+          inline: false
+        }
+      )
+      .setFooter({
+        text: "SiegeVerify • Automatic Rank Verification"
+      })
       .setTimestamp();
 
     await interaction.editReply({ embeds: [embed] });
