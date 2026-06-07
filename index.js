@@ -97,44 +97,28 @@ async function getStatsFromStatsCC(profileUrl) {
   const $ = cheerio.load(response.data);
   const pageText = $("body").text().replace(/\s+/g, " ").trim();
 
-  let currentRank = "Unranked";
-  let kd = "N/A";
   let maxRank = "Unranked";
-
-  const currentSeasonMatch = pageText.match(/Current Season(.{0,300})/i);
-
-  if (currentSeasonMatch) {
-    const currentSeasonText = currentSeasonMatch[1];
-    currentRank = findHighestRank(currentSeasonText);
-
-    const kdMatch = currentSeasonText.match(/KD\s*([0-9]+(?:\.[0-9]+)?)/i);
-    if (kdMatch) kd = kdMatch[1];
-  }
+  let kd = "N/A";
 
   const maxRanksMatch = pageText.match(/Max Ranks(.{0,700})/i);
 
   if (maxRanksMatch) {
-    const maxRanksText = maxRanksMatch[1];
-    maxRank = findHighestRank(maxRanksText);
+    maxRank = findHighestRank(maxRanksMatch[1]);
   }
 
-  if (currentRank === "Unranked") {
-    currentRank = findHighestRank(pageText);
-  }
+  const kdMatch = pageText.match(/KD\s*([0-9]+(?:\.[0-9]+)?)/i);
 
-  if (kd === "N/A") {
-    const kdMatch = pageText.match(/KD\s*([0-9]+(?:\.[0-9]+)?)/i);
-    if (kdMatch) kd = kdMatch[1];
+  if (kdMatch) {
+    kd = kdMatch[1];
   }
 
   if (maxRank === "Unranked") {
-    maxRank = currentRank;
+    maxRank = findHighestRank(pageText);
   }
 
   return {
-    currentRank,
-    kd,
-    maxRank
+    maxRank,
+    kd
   };
 }
 
@@ -266,11 +250,6 @@ client.on("interactionCreate", async interaction => {
         "**Rainbow Six Siege Rank Verification**\n\nSuccessfully verified via Stats.cc"
       )
       .addFields(
-        {
-          name: "🏆 Current Rank",
-          value: `**${stats.currentRank}**`,
-          inline: true
-        },
         {
           name: "⭐ Max Rank",
           value: `**${stats.maxRank}**`,
